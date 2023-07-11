@@ -137,7 +137,9 @@ def _should_index_course(course_metadata):
     Replicates the B2C index check of whether a certain course should be indexed for search.
 
     A course should only be indexed for algolia search if it has a non-indexed advertiseable course run, at least
-    one owner, and a marketing url slug.
+    one owner, a marketing url slug, and the advertisable course run has a verified upgrade deadline in the future
+    (in the case where there is *no* verified seat, or the upgrade deadline is null, we consider the deadline
+    to be some arbitrariliy distant date in the future).
     The course-discovery check that the course's partner is edX is included by default as the discovery API filters
     to the request's site's partner.
     The discovery check that the course has an availability level was decided to be a duplicate check that the
@@ -162,6 +164,10 @@ def _should_index_course(course_metadata):
         return False
 
     if not is_course_run_active(advertised_course_run):
+        return False
+
+    upgrade_deadline = _get_verified_upgrade_deadline(advertised_course_run)
+    if upgrade_deadline < localized_utcnow().timestamp():
         return False
 
     owners = course_json_metadata.get('owners') or []

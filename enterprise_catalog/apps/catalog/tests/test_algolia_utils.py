@@ -1,3 +1,4 @@
+from datetime import timedelta
 from unittest import mock
 from uuid import uuid4
 
@@ -15,12 +16,18 @@ from enterprise_catalog.apps.catalog.constants import (
 from enterprise_catalog.apps.catalog.tests.factories import (
     ContentMetadataFactory,
 )
+from enterprise_catalog.apps.catalog.utils import localized_utcnow
 
 
 ADVERTISED_COURSE_RUN_UUID = uuid4()
 FUTURE_COURSE_RUN_UUID_1 = uuid4()
 FUTURE_COURSE_RUN_UUID_2 = uuid4()
 PAST_COURSE_RUN_UUID_1 = uuid4()
+
+
+def _fake_upgrade_deadline(days_from_now=0):
+    deadline = localized_utcnow() + timedelta(days=days_from_now)
+    return deadline.strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
 @ddt.ddt
@@ -38,6 +45,24 @@ class AlgoliaUtilsTests(TestCase):
         {'expected_result': False, 'is_marketable': False},
         {'expected_result': True, },
         {'expected_result': True, 'course_run_availability': None},
+        {
+            'expected_result': True,
+            'seats': [
+                {'type': 'verified', 'upgrade_deadline': _fake_upgrade_deadline(100)}
+            ],
+        },
+        {
+            'expected_result': True,
+            'seats': [
+                {'type': 'something-else', 'upgrade_deadline': _fake_upgrade_deadline(-100)}
+            ],
+        },
+        {
+            'expected_result': False,
+            'seats': [
+                {'type': 'verified', 'upgrade_deadline': _fake_upgrade_deadline(-1)}
+            ],
+        },
     )
     @ddt.unpack
     def test_should_index_course(
@@ -50,6 +75,7 @@ class AlgoliaUtilsTests(TestCase):
         is_enrollable=True,
         is_marketable=True,
         course_run_availability='current',
+        seats=None,
     ):
         """
         Verify that only a course that has a non-hidden advertised course run, at least one owner, and a marketing slug
@@ -68,6 +94,7 @@ class AlgoliaUtilsTests(TestCase):
                     'is_enrollable': is_enrollable,
                     'is_marketable': is_marketable,
                     'availability': course_run_availability,
+                    'seats': seats or [],
                 },
             ],
             'owners': owners,
